@@ -77,6 +77,59 @@ A self-serve starter kit to evaluate your ability to interact with Meta’s Grap
 - Git installed
 - A Meta (Facebook) developer account with Leads Ads access
 
+## Meta Credentials (UI-Agnostic, 2025-ready)
+
+> You can complete this assignment **either** with **Live API** access (**Option A**) or using the provided **Offline Mode** (**Option B**). Live API is preferred, but Offline Mode is accepted if you don’t have Page/App access.
+
+### What you need (scopes & assets)
+
+- A Facebook **Page** that owns the **Lead Ads Form** you want to read
+- A token that can access that Page with at least:
+  - `leads_retrieval` (read Lead Ads data)
+  - `pages_read_engagement` (general page read)
+  - (often helpful) `pages_show_list`, `pages_manage_metadata`
+- The **Lead Form ID** (the object whose `/leads` edge you’ll query)
+
+---
+
+### Option A — Live API (recommended)
+
+There are multiple ways to create a valid token; the UI may change, but the **requirements** don’t. Use any of the following paths:
+
+#### A1) Business System User token (long-lived; best for servers)
+1. Create or pick a **Business** under Meta Business settings.
+2. Create a **System User**, assign the **Page** as an **Asset**, and grant access relevant to Lead Ads.
+3. Generate a **System User Access Token** for the App connected to that Business.
+4. Store the token in your `.env` as `META_ACCESS_TOKEN`.
+
+> If labels differ in the UI, look for: *Business Settings → Users → System Users*, *Add Assets*, *Generate Token/Access Token*, and make sure the **Page** asset is attached to the token.
+
+#### A2) Page Access Token via Graph API Explorer (good for quick tests)
+1. Open **Graph API Explorer**.
+2. Select your App (any type that can read Page data).
+3. Under **Permissions**, add `leads_retrieval`, `pages_read_engagement`.
+4. Click **Get Page Access Token**, choose your Page, and approve.
+5. Copy the token and use it as `META_ACCESS_TOKEN`.
+
+> These tokens can be short-lived; acceptable for the assignment. If you know how, you may extend the token using the standard **long-lived exchange** with your App secret.
+
+---
+
+### Verify your token works
+
+Replace placeholders and run these **read-only** checks (you can use `curl`, Postman, or the provided script).
+
+```bash
+# 1) Who am I? (basic check)
+curl "https://graph.facebook.com/v16.0/me?access_token=${META_ACCESS_TOKEN}"
+
+# 2) List lead forms on a Page (get your PAGE_ID first, or try /me/accounts)
+curl "https://graph.facebook.com/v16.0/${PAGE_ID}/leadgen_forms?access_token=${META_ACCESS_TOKEN}"
+
+# 3) Fetch leads from a specific form
+curl "https://graph.facebook.com/v16.0/${LEAD_FORM_ID}/leads?fields=id,created_time,field_data&access_token=${META_ACCESS_TOKEN}&limit=5"
+
+-----------------------------------------------------------------------------------------------------------------------------
 ## Obtain Meta Credentials
 1. **Create a Meta App**
    - Go to https://developers.facebook.com → **My Apps > Create App** → Choose **Business** → Next.
@@ -91,6 +144,7 @@ A self-serve starter kit to evaluate your ability to interact with Meta’s Grap
      ```http
      GET /v16.0/{page_id}/leadgen_forms?access_token={META_ACCESS_TOKEN}
      ```
+-----------------------------------------------------------------------------------------------------------------------------
 
 ## Clone & Setup Boilerplate
 ```bash
