@@ -1,212 +1,235 @@
-Furnishka-meta-lead-fetcher-boilerplate
+# Furnishka Meta Lead Fetcher
 
+A robust, idempotent CLI application designed to fetch Lead Ads data from Meta's Graph API, normalize raw responses into a clean structured schema, and persist ingested records using SQLite to eliminate duplicates across executions.
 
-## README.md
-
-````markdown
-# Furnishka Meta Lead Fetcher Boilerplate
-
-A self-serve starter kit to evaluate your ability to interact with Meta’s Graph API, parse lead data, and build a robust, idempotent CLI tool. This assignment mirrors real-world integrations you would build at Furnishka.
-
-## Contents
-1. [Assignment Goals](#assignment-goals)
-2. [What We Expect from You](#what-we-expect-from-you)
-3. [Steps to Follow](#steps-to-follow)
-4. [Boilerplate Description](#boilerplate-description)
-5. [Submission Guidelines](#submission-guidelines)
-6. [Prerequisites](#prerequisites)
-7. [Obtain Meta Credentials](#obtain-meta-credentials)
-8. [Clone & Setup Boilerplate](#clone--setup-boilerplate)
-9. [Configure Environment](#configure-environment)
-10. [Install Dependencies](#install-dependencies)
-11. [Run the Fetcher](#run-the-fetcher)
-12. [Inspect Output](#inspect-output)
-13. [Publishing to GitHub](#publishing-to-github)
+This tool supports both **Live API Access (Option A)** and an **Offline Mode (Option B)** with bundled sample data.
 
 ---
 
-## Assignment Goals
-- Authenticate and fetch Lead Ads data from a Meta Graph API endpoint.
-- Normalize and flatten the raw JSON into a simple schema (lead ID, name, email, phone, timestamp).
-- Implement idempotent behavior using local persistence (SQLite) to avoid duplicates.
-- Demonstrate error handling, logging, and pagination.
-- Provide clear documentation and ease-of-use for future maintainers.
+## Features
 
-## What We Expect from You
-- A working CLI tool (Python preferred) following the provided boilerplate.
-- Idempotent fetching: re-running should fetch only new leads.
-- Proper handling of missing data (skip/log leads without contact info).
-- Pagination support until all pages are retrieved.
-- Retry logic on transient API failures.
-- Clean, commented code adhering to best practices.
-- A concise README with setup, usage, and submission instructions.
-- Use AI tools at your ease
+- **Dual-Mode Operation**:
+  - **Live Mode**: Interacts with Meta's Graph API (`/v16.0/{form_id}/leads`) with full cursor pagination (`paging.next`).
+  - **Offline Mode**: Automatically falls back to local sample data (`data/meta_leads_sample.json`) when live credentials are not set, or when explicitly requested via `--offline`.
+- **Idempotency & Deduplication**:
+  - Tracks processed lead IDs in a local SQLite database (`data/seen_leads.db`).
+  - Re-running the tool processes only new, unrecorded leads.
+- **Data Normalization & Cleaning**:
+  - Flattens nested `field_data` structures into a standard schema: `lead_id`, `created_time`, `full_name`, `email`, `phone`.
+  - Intelligently handles field aliases (e.g., `full_name` vs `first_name` + `last_name`, `phone_number` vs `contact_number`).
+  - Validates contact details, automatically skipping and logging records missing both email and phone.
+- **Resilience & Transient Failure Recovery**:
+  - Built-in exponential backoff retry mechanism handling HTTP 429 rate limits (respecting `Retry-After` headers), HTTP 5xx server errors, and network timeouts.
+- **Export Formats**:
+  - Supports `--output json` (default) and `--output csv`.
+- **Automated Test Suite**:
+  - 14 automated unit tests covering normalization, persistence, idempotency, date filtering, and retry backoff.
 
-## Steps to Follow
-1. Read through the assignment goals and expectations.
-2. Clone this boilerplate repository (see below).
-3. Obtain your Meta App credentials and Lead Form ID.
-4. Configure the `.env` file with real values.
-5. Install dependencies.
-6. Run the fetcher CLI and verify output.
-7. Test idempotency by running twice.
-8. Package or zip your final code.
-9. Submit according to the guidelines below.
+---
 
-## Boilerplate Description
-- **.gitignore**: Excludes `.env`, caches, and local DB files.
-- **.env.sample**: Template for your Meta credentials and form ID.
-- **requirements.txt**: `requests` & `python-dotenv`.
-- **data/**: Contains `meta_leads_sample.json` and auto-generated `seen_leads.db`.
-- **src/fetcher.py**: Main CLI fetching, normalization, dedupe, and output logic.
-- **src/utils/db.py**: SQLite helper for seen lead tracking.
+## Project Structure
 
-## Submission Guidelines
-1. Create a ZIP of your project directory (exclude real `.env` or DBs).
-2. Include your `.env.sample` with dummy values.
-3. Ensure your README clearly explains how to:
-   - Install dependencies
-   - Configure credentials
-   - Run your tool
-   - Interpret output
-4. Provide sample output logs or screenshots.
-5. Submit the ZIP via the link provided in the assignment brief (or email to our hiring address).
+```
+assesment/
+├── .env.sample             # Environment variable template
+├── .gitignore               # Excludes secrets, caches, and DB files
+├── requirements.txt         # Project dependencies
+├── README.md                # Project documentation & run guide
+├── data/
+│   ├── meta_leads_sample.json  # Offline test leads
+│   └── seen_leads.db           # SQLite database tracking seen leads
+├── src/
+│   ├── __init__.py
+│   ├── fetcher.py           # Core CLI fetcher, normalization & export logic
+│   └── utils/
+│       ├── __init__.py
+│       └── db.py            # SQLite persistence layer
+└── tests/
+    ├── __init__.py
+    ├── test_db.py           # Unit tests for SQLite persistence & idempotency
+    └── test_fetcher.py      # Unit tests for normalization, parsing & retry
+```
+
+---
 
 ## Prerequisites
-- Python 3.8+ installed and on your PATH
-- Git installed
-- A Meta (Facebook) developer account with Leads Ads access
 
-## Meta Credentials (UI-Agnostic, 2025-ready)
-
-> You can complete this assignment **either** with **Live API** access (**Option A**) or using the provided **Offline Mode** (**Option B**). Live API is preferred, but Offline Mode is accepted if you don’t have Page/App access.
-
-### What you need (scopes & assets)
-
-- A Facebook **Page** that owns the **Lead Ads Form** you want to read
-- A token that can access that Page with at least:
-  - `leads_retrieval` (read Lead Ads data)
-  - `pages_read_engagement` (general page read)
-  - (often helpful) `pages_show_list`, `pages_manage_metadata`
-- The **Lead Form ID** (the object whose `/leads` edge you’ll query)
+- **Python 3.8+** (Tested on Python 3.14)
+- **Git**
 
 ---
 
-### Option A — Live API (recommended)
+## Installation & Setup
 
-There are multiple ways to create a valid token; the UI may change, but the **requirements** don’t. Use any of the following paths:
+1. **Navigate to the project directory**:
+   ```bash
+   cd assesment
+   ```
 
-#### A1) Business System User token (long-lived; best for servers)
-1. Create or pick a **Business** under Meta Business settings.
-2. Create a **System User**, assign the **Page** as an **Asset**, and grant access relevant to Lead Ads.
-3. Generate a **System User Access Token** for the App connected to that Business.
-4. Store the token in your `.env` as `META_ACCESS_TOKEN`.
-
-> If labels differ in the UI, look for: *Business Settings → Users → System Users*, *Add Assets*, *Generate Token/Access Token*, and make sure the **Page** asset is attached to the token.
-
-#### A2) Page Access Token via Graph API Explorer (good for quick tests)
-1. Open **Graph API Explorer**.
-2. Select your App (any type that can read Page data).
-3. Under **Permissions**, add `leads_retrieval`, `pages_read_engagement`.
-4. Click **Get Page Access Token**, choose your Page, and approve.
-5. Copy the token and use it as `META_ACCESS_TOKEN`.
-
-> These tokens can be short-lived; acceptable for the assignment. If you know how, you may extend the token using the standard **long-lived exchange** with your App secret.
-
----
-
-### Verify your token works
-
-Replace placeholders and run these **read-only** checks (you can use `curl`, Postman, or the provided script).
-
-```bash
-# 1) Who am I? (basic check)
-curl "https://graph.facebook.com/v16.0/me?access_token=${META_ACCESS_TOKEN}"
-
-# 2) List lead forms on a Page (get your PAGE_ID first, or try /me/accounts)
-curl "https://graph.facebook.com/v16.0/${PAGE_ID}/leadgen_forms?access_token=${META_ACCESS_TOKEN}"
-
-# 3) Fetch leads from a specific form
-curl "https://graph.facebook.com/v16.0/${LEAD_FORM_ID}/leads?fields=id,created_time,field_data&access_token=${META_ACCESS_TOKEN}&limit=5"
-
------------------------------------------------------------------------------------------------------------------------------
-## Obtain Meta Credentials
-1. **Create a Meta App**
-   - Go to https://developers.facebook.com → **My Apps > Create App** → Choose **Business** → Next.
-   - Under **Add Products**, select **Facebook Login** and **Leads Ads**, then **Set Up**.
-2. **Generate a System User Access Token**
-   - In Business Settings → **Users > System Users** → Create or select a system user.
-   - Under **Add Assets**, assign your Facebook Page and grant `pages_read_user_content` & `leads_retrieval`.
-   - Click **Generate New Token**, choose your system user and Page, then copy the long-lived token.
-3. **Retrieve Lead Form ID**
-   - In Ads Manager → **Lead Ads Forms**, click your form and copy the Form ID from the URL.
-   - Or via Graph API Explorer:
-     ```http
-     GET /v16.0/{page_id}/leadgen_forms?access_token={META_ACCESS_TOKEN}
+2. **Create and activate a virtual environment**:
+   - On Windows (PowerShell):
+     ```powershell
+     python -m venv .venv
+     .\.venv\Scripts\Activate.ps1
      ```
------------------------------------------------------------------------------------------------------------------------------
+   - On Linux / macOS:
+     ```bash
+     python3 -m venv .venv
+     source .venv/bin/activate
+     ```
 
-## Clone & Setup Boilerplate
-```bash
-# Clone the starter repo
-git clone https://github.com/<your-org>/furnishka-meta-lead-fetcher-boilerplate.git
-cd furnishka-meta-lead-fetcher-boilerplate
-````
-
-## Configure Environment
-
-1. Copy and edit `.env.sample`:
-
+3. **Install dependencies**:
    ```bash
-   cp .env.sample .env
-   ```
-2. Open `.env` and fill in your credentials:
-
-   ```dotenv
-   META_APP_ID=<your_meta_app_id>
-   META_APP_SECRET=<your_meta_app_secret>
-   META_ACCESS_TOKEN=<your_system_user_token>
-   LEAD_FORM_ID=<your_lead_form_id>
+   pip install -r requirements.txt
    ```
 
-## Install Dependencies
+---
 
+## Configuration
+
+Copy `.env.sample` to `.env`:
 ```bash
-pip install -r requirements.txt
+cp .env.sample .env
 ```
 
-## Run the Fetcher
+Edit `.env` based on your desired execution mode:
 
+### Option A: Live API Mode
+Obtain credentials from your Meta Developer App and Facebook Business Settings:
+```dotenv
+META_APP_ID=your_meta_app_id
+META_APP_SECRET=your_meta_app_secret
+META_ACCESS_TOKEN=your_system_user_or_page_access_token
+LEAD_FORM_ID=your_lead_form_id
+OFFLINE_MODE=false
+```
+
+### Option B: Offline Mode (Default)
+If you don't have active Meta Graph API credentials, keep the placeholders or set `OFFLINE_MODE=true`:
+```dotenv
+META_ACCESS_TOKEN=your_access_token_here
+LEAD_FORM_ID=your_lead_form_id_here
+OFFLINE_MODE=true
+```
+
+---
+
+## Running the CLI Tool
+
+### 1. Default Run (Offline Mode)
+Outputs new leads into `new_leads.json`:
 ```bash
-# Fetch leads since 2025-07-01 and output JSON
-python -m src.fetcher --since 2025-07-01T00:00:00+0000 --output json
+python -m src.fetcher
 ```
 
-* Use `--output csv` to generate a CSV file.
-* Use `--since` to limit results to after a given ISO timestamp.
-
-## Inspect Output
-
-* **new\_leads.json** or **new\_leads.csv**: Contains only new, deduplicated leads.
-* **data/seen\_leads.db**: SQLite DB tracking seen `lead_id`s.
-* **Logs**: Errors or skipped records appear in the console.
-
-## Publishing to GitHub
-
-1. **Create the repository** on GitHub named `tech_assignment` (skip README init).
-2. **Initialize & Push**:
-
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial boilerplate commit"
-   git branch -M main
-   git remote add origin https://github.com/<your-org>/tech_assignment.git
-   git push -u origin main
-   ```
-3. **Verify** `.env` is in `.gitignore` to avoid leaking credentials.
-4. **Optional**: Enable branch protection and CI/secrets in Settings.
-5. **Share URL**: `https://github.com/<your-org>/furnishka-meta-lead-fetcher-boilerplate`
-
+### 2. Output as CSV
+Exports formatted CSV into `new_leads.csv`:
+```bash
+python -m src.fetcher --output csv
 ```
+
+### 3. Filter Leads Since a Specific Date
+```bash
+python -m src.fetcher --since 2025-07-24T12:00:00+0000 --output json
+```
+
+### 4. Custom File Paths
+```bash
+python -m src.fetcher --offline --file data/meta_leads_sample.json --out-file custom_leads.json --db-path data/custom_db.db
+```
+
+### 5. CLI Options Reference
+```
+options:
+  -h, --help           Show help message and exit
+  --since SINCE        ISO 8601 timestamp to fetch leads since (e.g. 2025-07-01T00:00:00+0000)
+  --output {json,csv}  Output file format (default: json)
+  --out-file OUT_FILE  Custom output destination path
+  --db-path DB_PATH    Path to SQLite seen leads database (default: data/seen_leads.db)
+  --offline            Force offline mode using sample data
+  --file FILE          Sample JSON file path for offline mode
+  --verbose            Enable verbose debug logging
+```
+
+---
+
+## Idempotency Verification
+
+When executing the fetcher consecutively against the same source, subsequent runs report `0` new leads:
+
+### Run 1 (Fresh Ingestion):
+```text
+2026-11-23 23:11:13 [INFO] meta_lead_fetcher: Running in OFFLINE mode. Reading leads from 'data/meta_leads_sample.json'
+2026-11-23 23:11:13 [WARNING] meta_lead_fetcher: Skipping lead 1002: missing contact info (email & phone both empty)
+
+=======================================================
+          FURNISHKA LEAD FETCHER SUMMARY
+=======================================================
+ Mode:                 OFFLINE (Option B)
+ Total Leads Retrieved: 2
+ New Leads Ingested:    1
+ Duplicates Skipped:    0
+ Invalid/Skipped Leads: 1
+ Output Destination:    new_leads.json
+ Database Total Stored: 1
+=======================================================
+```
+
+### Run 2 (Idempotent Run - Immediate duplicate skip):
+```text
+2026-11-23 23:11:13 [INFO] meta_lead_fetcher: Running in OFFLINE mode. Reading leads from 'data/meta_leads_sample.json'
+2026-11-23 23:11:13 [WARNING] meta_lead_fetcher: Skipping lead 1002: missing contact info (email & phone both empty)
+
+=======================================================
+          FURNISHKA LEAD FETCHER SUMMARY
+=======================================================
+ Mode:                 OFFLINE (Option B)
+ Total Leads Retrieved: 2
+ New Leads Ingested:    0
+ Duplicates Skipped:    1
+ Invalid/Skipped Leads: 1
+ Output Destination:    new_leads.json
+ Database Total Stored: 1
+=======================================================
+```
+
+---
+
+## Running Automated Tests
+
+Run the test suite with `pytest`:
+```bash
+pytest -v
+```
+
+Expected output:
+```text
+============================= test session starts =============================
+collected 14 items
+
+tests/test_db.py::test_db_initialization PASSED                          [  7%]
+tests/test_db.py::test_mark_and_check_single_lead PASSED                 [ 14%]
+tests/test_db.py::test_idempotent_inserts PASSED                         [ 21%]
+tests/test_db.py::test_mark_seen_many PASSED                             [ 28%]
+tests/test_db.py::test_empty_or_none_handling PASSED                     [ 35%]
+tests/test_db.py::test_corrupt_database_recovery PASSED                  [ 42%]
+tests/test_fetcher.py::test_normalize_lead_standard PASSED               [ 50%]
+tests/test_fetcher.py::test_normalize_lead_split_name_and_synonyms PASSED [ 57%]
+tests/test_fetcher.py::test_validate_lead_contact PASSED                 [ 64%]
+tests/test_fetcher.py::test_parse_iso_datetime PASSED                    [ 71%]
+tests/test_fetcher.py::test_fetch_leads_offline PASSED                   [ 78%]
+tests/test_fetcher.py::test_save_output_json_and_csv PASSED              [ 85%]
+tests/test_fetcher.py::test_fetch_with_retry_server_error_recovery PASSED [ 92%]
+tests/test_fetcher.py::test_fetch_with_retry_rate_limit PASSED           [100%]
+
+============================= 14 passed in 0.43s ==============================
+```
+
+---
+
+## Submission Preparation
+
+To generate a clean submission ZIP file excluding `.env`, `.venv`, and temporary database files:
+```powershell
+Compress-Archive -Path src, tests, data\meta_leads_sample.json, requirements.txt, .env.sample, .gitignore, README.md -DestinationPath furnishka_meta_lead_fetcher_submission.zip -Force
 ```

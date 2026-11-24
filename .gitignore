@@ -1,9 +1,20 @@
 # Environment
 .env
+.venv/
+env/
+venv/
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.pytest_cache/
 
-# Data files
+# Data & Output files
 data/*.db
+data/seen_leads.db
+new_leads.json
+new_leads.csv
+
+# Archives
+*.zip
